@@ -684,5 +684,5 @@ MIT License — free to use, modify, and distribute.
 ---
 
 <div align="center">
-Built with ❤️ using Next.js, Prisma, and AI magic.
+Built using ❤️ with Next.js, Prisma, and AI magic.
 </div>
