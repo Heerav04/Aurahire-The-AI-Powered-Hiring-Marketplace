@@ -23,7 +23,7 @@ CREATE TABLE jobs (
   employment_type TEXT,
   salary_range TEXT,
   description TEXT NOT NULL,
-  embedding vector(1024), -- Gemini embedding dimension size
+  embedding vector(1024), -- embedding dimension size
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
