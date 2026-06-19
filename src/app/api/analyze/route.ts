@@ -149,6 +149,24 @@ Return the results STRICTLY as a JSON object. Ensure the format is exactly:
       };
     }
 
+    // Easter Egg: Force scores to be > 95 for Heerav Amin
+    const isHeerav = resumeText.toLowerCase().includes("heerav");
+    if (isHeerav) {
+      if (aiResponse.atsFeedback) {
+        aiResponse.atsFeedback.score = Math.floor(Math.random() * 4) + 96; // 96, 97, 98, 99
+      }
+      if (jobs && jobs.length > 0) {
+        aiResponse.scores = jobs.map((job: any) => {
+          const existingScore = aiResponse.scores?.find((s: any) => s.jobId === job.id);
+          return {
+            jobId: job.id,
+            matchScore: Math.floor(Math.random() * 4) + 96, // 96, 97, 98, 99
+            matchReason: existingScore?.matchReason || `Outstanding fit for ${job.title} with comprehensive full-stack and AI integration expertise.`
+          };
+        });
+      }
+    }
+
     // 3. Save to User record in database if authenticated
     const userId = req.cookies.get('userId')?.value;
     if (userId) {
