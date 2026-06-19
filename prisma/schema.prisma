@@ -1,0 +1,144 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ----------------------------------------------------------------------------
+// Core User Identity
+// ----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  phone         String?
+  headline      String?
+  avatarUrl     String?
+  role          String    @default("seeker") // 'seeker' or 'recruiter'
+  resumeText    String?   // Store candidate's parsed resume text
+  resumeName    String?   // Store candidate's uploaded resume filename
+  structuredResume String? // Store candidate's resume in formalized JSON resume syntax
+  skills        String?   // Comma-separated list of extracted skills
+  atsFeedback   String?   // JSON string containing formatting errors and suggestions
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relationships
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  companies     Company[] // Recruiters manage companies
+  applications  Application[]
+
+  // Networking (Connections)
+  connectionsSent     Connection[] @relation("Requester")
+  connectionsReceived Connection[] @relation("Recipient")
+}
+
+// ----------------------------------------------------------------------------
+// Social Network Features (LinkedIn)
+// ----------------------------------------------------------------------------
+
+model Post {
+  id        String    @id @default(cuid())
+  content   String
+  imageUrl  String?
+  authorId  String
+  createdAt DateTime  @default(now())
+  
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  likes     Like[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  postId    String
+  authorId  String
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId]) // A user can only like a post once
+}
+
+model Connection {
+  id          String   @id @default(cuid())
+  requesterId String
+  recipientId String
+  status      String   @default("pending") // 'pending', 'accepted', 'rejected'
+  createdAt   DateTime @default(now())
+
+  requester   User     @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient   User     @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, recipientId])
+}
+
+// ----------------------------------------------------------------------------
+// Professional Hiring Features (Indeed)
+// ----------------------------------------------------------------------------
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  logoUrl     String?
+  description String?
+  industry    String?
+  ownerId     String
+  createdAt   DateTime @default(now())
+
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  jobs        Job[]
+}
+
+model Job {
+  id             String        @id @default(cuid())
+  title          String
+  location       String?
+  employmentType String?
+  salaryRange    String?
+  domain         String?
+  description    String
+  companyId      String
+  createdAt      DateTime      @default(now())
+
+  company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications   Application[]
+}
+
+model Application {
+  id             String   @id @default(cuid())
+  jobId          String
+  seekerId       String
+  resumeText     String   // Storing raw text since SQLite can't do vector easily without extensions
+  resumeName     String   @default("resume.pdf") // Filename of candidate's uploaded resume
+  structuredResume String? // Store candidate's resume in formalized JSON resume syntax
+  aiMatchScore   Int?
+  aiMatchReason  String?
+  createdAt      DateTime @default(now())
+
+  job            Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  seeker         User     @relation(fields: [seekerId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, seekerId]) // A seeker can only have one application per job
+}
