@@ -1,0 +1,449 @@
+================================================================================
+ AURAHIRE — AI-POWERED HIRING PLATFORM: ARCHITECTURE, FILES & INTERVIEW GUIDE
+================================================================================
+
+This guide serves as a complete reference manual for the AuraHire project,
+detailing the architecture, technology stack, file roles, and critical 
+technical decisions. It is designed to prepare you for highly technical,
+deep-dive engineering interviews by detailing "What" was built, "How" it 
+works under the hood, and "Why" specific strategies were chosen.
+
+--------------------------------------------------------------------------------
+1. PROJECT OVERVIEW & ARCHITECTURE
+--------------------------------------------------------------------------------
+AuraHire is a full-stack AI-powered hiring marketplace designed to connect
+job seekers with opportunities using semantic AI matchmaking, ATS optimization
+scoring, and a streamlined recruiter ATS management portal. 
+
+Key technical parameters of the application:
+- Next.js 16 (App Router) using React Server Components (RSC) to maximize SEO
+  and decrease initial bundle load size.
+- TypeScript 5 for type safety across API routes, db payloads, and client states.
+- Tailwind CSS 4 for styling (using its new high-performance CSS compiler).
+- Prisma 5 ORM for database abstraction, supporting SQLite for local rapid
+  prototyping and PostgreSQL (Supabase/Neon) for production scaling.
+- OpenRouter API (OpenAI SDK client wrapper) calling LLMs (e.g., Google Gemma
+  or Meta LLaMA) with strict prompt constraints to perform extraction and matching.
+- Native PDF Extraction (`pdf2json`) to parse resume binaries directly on the
+  server without leaking sensitive candidate data to third-party endpoints.
+- Edge Middleware-driven RBAC (Role-Based Access Control) using passwordless 
+  cookie sessions.
+
+--------------------------------------------------------------------------------
+2. PROJECT FILE DIRECTORY & DETAILED ROLES
+--------------------------------------------------------------------------------
+
+Below is the directory mapping of the project showing every file's function:
+
+├── prisma/
+│   ├── schema.prisma        # Database schema specifying models (User, Post, Job, etc.) 
+│   │                        # and relationships (applications, posted jobs).
+│   └── seed.ts              # Seeding script using `@faker-js/faker` to populate the 
+│                            # database with realistic jobs, recruiters, and seeker accounts.
+│
+├── public/                  # Static assets including icons, screenshots, and visual branding.
+│
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx       # Root layout defining the base HTML/body, loading Inter/Outfit 
+│   │   │                    # fonts, and containing global providers or wrappers.
+│   │   ├── page.tsx         # Sleek landing page featuring dark mode design, call-to-actions (CTAs), 
+│   │   │                    # feature benefits, and access portals.
+│   │   ├── globals.css      # Core Tailwind CSS file defining design variables, theme colors, 
+│   │   │                    # scrollbars, custom fonts, and base styling rules.
+│   │   │
+│   │   ├── login/
+│   │   │   └── page.tsx     # Client-side form handling sign-in & registration for Seekers 
+│   │   │                    # and Recruiters with automatic user cookie initialization.
+│   │   │
+│   │   ├── seeker/
+│   │   │   ├── page.tsx     # Seeker Dashboard. Handles resume PDF uploads, displays structured
+│   │   │   │                # resume visualizer, shows ATS scores, suggestions, and lists
+│   │   │   │                # semantically matched jobs sorted by AI compatibility score.
+│   │   │   └── jobs/
+│   │   │       ├── page.tsx # Simple page component referencing the JobBrowseClient.
+│   │   │       └── JobBrowseClient.tsx # Seeker Job Portal. Allows searching, browsing details,
+│   │   │                    # and one-click/re-apply application workflows.
+│   │   │
+│   │   ├── recruiter/
+│   │   │   ├── page.tsx     # Direct entry point importing the RecruiterDashboardClient.
+│   │   │   ├── RecruiterDashboardClient.tsx # Recruiter Dashboard. Main interface listing applicants
+│   │   │   │                # ranked by AI scores, searchable by name/email, filterable by job 
+│   │   │   │                # title, with structured resume previewers and text resume downloads.
+│   │   │   └── post-job/
+│   │   │       └── page.tsx # Job posting form enabling recruiters to create new listings with
+│   │   │                    # title, salary range, domain tags, location, and description.
+│   │   │
+│   │   ├── admin/
+│   │   │   ├── layout.tsx   # Admin-specific container layout for sidebar/navbar.
+│   │   │   ├── page.tsx     # Main User Directory. Lists, filters, and sorts all users. Displays
+│   │   │   │                # user stats (number of applications, jobs posted).
+│   │   │   ├── login/
+│   │   │   │   └── page.tsx # Secure Admin login panel authenticated with `ADMIN_SECRET`.
+│   │   │   ├── seekers/
+│   │   │   │   └── [id]/
+│   │   │   │       └── page.tsx # Admin detail viewer showing profile metrics of a job seeker.
+│   │   │   ├── recruiters/
+│   │   │   │   └── [id]/
+│   │   │   │       └── page.tsx # Admin detail viewer showing profile metrics of a recruiter.
+│   │   │   └── jobs/
+│   │   │       └── [id]/
+│   │   │           └── page.tsx # Admin detail viewer displaying job status and applicant counts.
+│   │   │
+│   │   ├── feed/
+│   │   │   └── page.tsx     # Social Feed interface (LinkedIn style) with placeholder items, 
+│   │   │                    # like/comment options, and trending jobs widget.
+│   │   ├── network/
+│   │   │   └── page.tsx     # Connections dashboard displaying developer and recruiter suggestions 
+│   │   │                    # with connection request buttons.
+│   │   ├── profile/
+│   │   │   └── page.tsx     # Profile page allowing users to modify details (name, email, headline).
+│   │   │
+│   │   └── api/
+│   │       ├── analyze/
+│   │       │   └── route.ts # Core API handler. Accepts resume file uploads, extracts raw PDF 
+│   │       │                # text locally, invokes OpenRouter LLM, handles responses, and
+│   │       │                # updates database user stats.
+│   │       ├── apply/
+│   │       │   └── route.ts # Submit/update job application API. Stores resume state and AI metrics.
+│   │       ├── jobs/
+│   │       │   └── route.ts # REST API for fetching available jobs with company details.
+│   │       ├── admin/
+│   │       │   └── users/
+│   │       │       └── route.ts # Lists, searches, and sorts platform users (Admin authorization required).
+│   │       └── auth/
+│   │           ├── login/
+│   │           │   └── route.ts # Sets HTTP-only cookies establishing authenticated user session.
+│   │           ├── logout/
+│   │           │   └── route.ts # Clears session cookies to sign out the user.
+│   │           ├── me/
+│   │           │   └── route.ts # Retrieves current user details (GET) or deletes account (DELETE).
+│   │           ├── role/
+│   │           │   └── route.ts # Fast cookie extraction endpoint checking current active role.
+│   │           └── switch-role/
+│   │               └── route.ts # Updates the userRole cookie and user role in DB dynamically.
+│   │
+│   ├── components/
+│   │   └── ResumeRenderer.tsx # Interactive component highlighting extracted resume fields 
+│   │                          # (Education, Skills, Work Experience, Projects) in a structured UI.
+│   │
+│   ├── lib/
+│   │   └── prisma.ts        # PrismaClient global singleton instance configuration.
+│   │
+│   └── middleware.ts        # Next.js Edge Middleware verifying cookies, preventing cross-portal
+│                            # access (Seekers in Recruiter route), and securing admin paths.
+│
+├── .env.local               # Private local environment variables (not tracked in Git).
+├── package.json             # App dependencies, engines, and NPM build scripts.
+├── next.config.ts           # Next.js optimization and compile configs.
+├── tsconfig.json            # TypeScript build preferences and path aliases (e.g. `@/*`).
+├── supabase_schema.sql      # Database schema script mapping PostgreSQL tables for hosting.
+├── check_users.js           # CLI script to inspect registered database users.
+├── check_job.js             # CLI script to inspect active job postings and applicant counts.
+└── test_ai.js               # CLI test script verifying LLM API connection.
+
+--------------------------------------------------------------------------------
+3. CORE SYSTEM STRATEGIES & APIs
+--------------------------------------------------------------------------------
+
+- Local PDF Parsing (Privacy-First):
+  Most ATS systems send resumes directly to expensive third-party SaaS parsers. 
+  AuraHire uses `pdf2json` locally. The PDF file buffer is parsed into memory 
+  directly inside Next.js API route. This ensures that personal information 
+  remains secure, minimizes API latencies, and eliminates third-party parsing costs.
+
+- OpenRouter API Integration:
+  Instead of hardcoding a single AI provider (like OpenAI or Anthropic), we wrap 
+  our AI module using OpenRouter. This gives the application runtime flexibility
+  to load models like Google Gemma-4, Meta LLaMA 3, or Claude 3.5 Sonnet by
+  modifying a single environment variable (`AI_MODEL`).
+
+- Next.js Edge Middleware for Role Enforcement:
+  Rather than writing redirection checks on every single page component (which 
+  causes visual layout shifts and slow load times), the logic runs in a Next.js 
+  Edge Middleware. It intercepts requests before they hit the server or render, 
+  performing redirection at the edge layer in under ~5ms.
+
+- Prisma Singleton Pattern:
+  In development, Next.js utilizes fast hot-reloading which re-runs code blocks
+  frequently. If a standard `new PrismaClient()` was instantiated inside routes,
+  each hot-reload would open a new TCP pool connection, quickly depleting SQLite/
+  PostgreSQL database connection limits. The singleton pattern in `lib/prisma.ts` 
+  prevents this by binding the client instance to the global object scope.
+
+--------------------------------------------------------------------------------
+4. TOUGH INTERVIEW QUESTIONS & ANSWERS (WHAT, HOW, WHY)
+--------------------------------------------------------------------------------
+
+================================================================================
+Q1: How did you implement PDF resume parsing on your backend, and how did you
+    ensure that parsing remains fast, private, and secure?
+================================================================================
+[WHAT]:
+We parsed uploaded binary PDF resume files into raw text strings inside a Next.js
+serverless API route without delegating to external SaaS parsers.
+
+[HOW]:
+Inside `src/app/api/analyze/route.ts`:
+1. The route parses the incoming `multipart/form-data` request using `req.formData()`.
+2. The file is extracted as a web-standard `File` object.
+3. We convert it to a Node `Buffer` by calling `file.arrayBuffer()` and passing 
+   the result to `Buffer.from()`.
+4. We feed this buffer into `pdf2json` (a library that parses PDF structures locally).
+5. We wrap this event-driven library in a JavaScript `Promise` to make it compatible
+   with `async/await` syntax.
+   
+```typescript
+resumeText = await new Promise<string>((resolve, reject) => {
+  const pdfParser = new PDFParser(null, true); // true sets text-only extraction
+  pdfParser.on("pdfParser_dataError", (errData) => reject(errData.parserError));
+  pdfParser.on("pdfParser_dataReady", () => {
+    resolve(pdfParser.getRawTextContent());
+  });
+  pdfParser.parseBuffer(buffer);
+});
+```
+
+[WHY]:
+- Security/Privacy: Standard commercial parsing services require sending the resume 
+  binary to their clouds, which raises concerns about user data privacy and GDPR/HIPAA
+  compliance. Local parsing ensures that user information never leaves our control.
+- Cost: We eliminate API paywalls associated with document parsing SaaS providers.
+- Architecture: Storing the raw text as a string in our database allows us to perform 
+  semantic analysis or index it for text search anytime.
+
+================================================================================
+Q2: How did you construct the prompt to get predictable, structured JSON back
+    from the LLM, and how did you handle JSON parsing failures?
+================================================================================
+[WHAT]:
+We constructed a structured system prompt requesting resume analysis, formatting
+error detection, skills list extraction, JSON schema formulation, and job matching scores.
+We also added a parsing fallback system to handle cases where the LLM response is 
+malformed or wrapped in extra markdown characters.
+
+[HOW]:
+1. Prompt Construction: We pass both the candidate's resume (truncated to 4,000 
+   characters to save token costs) and the list of active jobs to the LLM. 
+2. Strict Formatting: We instruct the model to return a single JSON object matching
+   a schema layout (containing `skills`, `atsFeedback`, `structuredResume`, and `scores`).
+3. Robust Parsing Helper: LLMs frequently wrap their output in markdown backticks 
+   (e.g., ```json ... ```) or prefix the response with conversational explanations.
+   To clean this, we search for the first `{` and the last `}` in the response string:
+   
+```typescript
+const jsonStart = content.indexOf('{');
+const jsonEnd = content.lastIndexOf('}') + 1;
+if (jsonStart !== -1 && jsonEnd !== -1) {
+  content = content.substring(jsonStart, jsonEnd);
+}
+aiResponse = JSON.parse(content);
+```
+
+4. Fail-Safe Fallbacks: If parsing fails entirely, we catch the error, write a log,
+   and return a valid JSON object with the user's raw extracted text but empty analysis 
+   fields. This prevents the user interface from crashing.
+
+[WHY]:
+- LLM output is inherently non-deterministic. Without a parsing safeguard, any minor 
+  formatting quirk from the model (such as returning markdown symbols) would crash 
+  `JSON.parse()` and throw a 500 error on the frontend application.
+- The fallbacks ensure a seamless user experience. Even if the AI evaluation fails,
+  the user's resume text is still successfully saved to their profile.
+
+================================================================================
+Q3: How does the authentication and Role-Based Access Control (RBAC) system
+    work, and why did you choose a passwordless cookie-based design?
+================================================================================
+[WHAT]:
+We built a passwordless cookie-based session manager enforced globally using Next.js 
+Edge Middleware. It restricts page and API access based on whether the active user 
+is a Job Seeker, a Recruiter, or an Admin.
+
+[HOW]:
+1. Session Creation: Upon login or sign-up, the server sets HTTP-only cookies: 
+   `userId`, `userRole`, `userName`, and `userEmail` with an expiration window of 7 days.
+2. Edge Validation: In `src/middleware.ts`, we inspect the incoming request cookies.
+3. Path Matching & Redirecting:
+   - Seeker routes (`/seeker/*`) require a `userId` and a `userRole === 'seeker'`.
+   - Recruiter routes (`/recruiter/*`) require a `userId` and a `userRole === 'recruiter'`.
+   - Admin routes (`/admin/*`) require `userRole === 'admin'`.
+   - If a seeker tries to access `/recruiter`, the middleware catches it and forces a redirect to `/seeker`.
+   - If a guest attempts to access any dashboard without cookies, they are redirected to `/login`.
+4. The middleware configuration limits execution to only these protected paths, 
+   ignoring static assets and public landing pages to save CPU cycles.
+
+[WHY]:
+- Security: Traditional session models require checking passwords, which introduces
+  the risk of data leaks and hacking. Our passwordless setup simplifies onboarding 
+  while avoiding password storage risks.
+- HTTP-Only Protection: Cookies are marked HTTP-only, making them inaccessible to
+  client-side JavaScript scripts and protecting them from Cross-Site Scripting (XSS) 
+  attacks.
+- Performance: Next.js Edge Middleware runs on Vercel's Edge network (closer to 
+  the user), which checks sessions and redirects pages in under 5ms, avoiding slow 
+  server-side rendering blocks.
+
+================================================================================
+Q4: Explain how you designed your Prisma schema. How do you handle SQLite for
+    development while ensuring seamless migration to PostgreSQL in production?
+================================================================================
+[WHAT]:
+We designed an entity-relationship schema that stores profile information,
+social network posts, connection networks, company profiles, job listings, 
+and applications. The database runs SQLite locally and transitions to 
+PostgreSQL for production.
+
+[HOW]:
+Our schema links data together cleanly:
+- `User` has a one-to-many relationship with `Application` and `Company`.
+- `Company` has a one-to-many relationship with `Job`.
+- `Job` has a one-to-many relationship with `Application`.
+- `Application` has a unique constraint `@@unique([jobId, seekerId])` to enforce 
+  that a seeker can only apply to a job once.
+
+To bridge development and production:
+1. In `prisma/schema.prisma`, we use the database provider specified by the ORM:
+   ```prisma
+   datasource db {
+     provider = "postgresql"
+     url      = env("DATABASE_URL")
+   }
+   ```
+2. Locally, we use a tool like `npx prisma db push` to keep SQLite updated 
+   without creating complex migrations.
+3. For deployment, we supply a PostgreSQL connection URL (e.g., Supabase or Neon),
+   run `npx prisma migrate deploy` in our CI/CD pipeline, and generate the client 
+   using `prisma generate`.
+
+[WHY]:
+- Swapping databases is simple because Prisma abstracts database-specific SQL 
+  queries. Our application code remains the same whether it runs on SQLite 
+  locally or PostgreSQL in production.
+- The unique constraint `@@unique([jobId, seekerId])` prevents duplicate database 
+  records and errors, keeping data clean without requiring extra API validation checks.
+
+================================================================================
+Q5: How did you implement the "Role Switching" feature, and how does it affect 
+    the database and cookies?
+================================================================================
+[WHAT]:
+We allowed users to toggle their role between a Job Seeker and a Recruiter 
+using a single button on their dashboard, dynamically changing access permissions 
+and updating their data.
+
+[HOW]:
+1. Client Action: The user clicks "Switch Role". This calls `POST /api/auth/switch-role`.
+2. Backend Update: The endpoint finds the user's ID from their cookie, queries the 
+   database, and toggles their database role field (e.g., `seeker` to `recruiter`).
+3. Cookie Update: The server updates the `userRole` cookie with the new value 
+   using `NextResponse.cookies.set('userRole', newRole)`.
+4. Client Redirect: The frontend receives a success response and performs a 
+   hard reload, redirecting the user to their new dashboard.
+
+[WHY]:
+- User Experience: Storing both seeker and recruiter data in a single account 
+  simplifies the experience for users who want to hire while looking for roles 
+  themselves.
+- Security: Updating both the cookie and the database prevents users from bypassing 
+  role checks by modifying client cookies.
+
+================================================================================
+Q6: How does the Admin panel authenticate users securely without database storage,
+    and how does it fetch user statistics efficiently?
+================================================================================
+[WHAT]:
+The Admin panel allows managing users without saving administrator credentials in 
+the database. It queries user statistics efficiently using Prisma's relation count 
+features.
+
+[HOW]:
+1. Secret-Key Login: Admin login uses the `ADMIN_SECRET` environment variable.
+   During login, we check if the input matches this key. If it matches, we set 
+   `userRole = 'admin'` in the session cookie.
+2. Edge Access Check: The middleware blocks anyone without the `admin` role cookie 
+   from accessing `/admin/*` routes.
+3. Efficient Stats: In `src/app/api/admin/users/route.ts`, we fetch user metrics 
+   using Prisma's `_count` option in a single query:
+   
+```typescript
+const users = await prisma.user.findMany({
+  where: whereClause,
+  select: {
+    id: true,
+    name: true,
+    email: true,
+    role: true,
+    _count: {
+      select: {
+        posts: true,
+        companies: true,
+        applications: true
+      }
+    }
+  }
+});
+```
+
+[WHY]:
+- Secure Administration: Not saving admin accounts in the database protects the 
+  system. Even if the database is compromised, administrative access remains secure.
+- Optimized Queries: Using Prisma's `_count` calculates relations (like applications 
+  or posts) directly in the database, avoiding the performance hit of fetching and 
+  processing large datasets in memory.
+
+================================================================================
+Q7: What steps did you take to prevent connection pool exhaustion in Next.js
+    serverless environments?
+================================================================================
+[WHAT]:
+We implemented the Prisma Client Singleton pattern to reuse database connections 
+and prevent overloading the database in serverless environments.
+
+[HOW]:
+In `src/lib/prisma.ts`:
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: ['query'],
+  });
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+```
+
+[WHY]:
+In development, Next.js clears the node cache on hot-reloads, which would create 
+a new `PrismaClient` and database connection pool on every code edit. This quickly 
+exhausts connection limits (especially with SQLite's 1-connection limit). Binding the 
+instance to the global scope preserves the connection across hot-reloads.
+
+================================================================================
+Q8: How did you design the AI matching algorithm, and what is the difference 
+    between semantic matching and simple keyword searches?
+================================================================================
+[WHAT]:
+We designed an AI matching system that evaluates how well a candidate's resume 
+fits a job listing using context and meaning, rather than simple keyword matching.
+
+[HOW]:
+1. Prompt Strategy: We instruct the LLM to read the full context of a resume 
+   alongside the active job description (including required skills, tools, and 
+   experience levels).
+2. Contextual Scoring: The model assigns a score (0 to 100) and provides a clear
+   reason for the score (e.g., "The candidate has strong React experience, but lacks 
+   the required 2 years of Python experience").
+3. Recruiter Shortlisting: In `RecruiterDashboardClient.tsx`, candidates with an 
+   AI score of 65 or higher are automatically marked as "Shortlisted".
+
+[WHY]:
+- Context: A simple keyword search might miss a candidate who writes "engineered 
+  interactive user interfaces" instead of the exact phrase "frontend developer". 
+  Semantic AI matching understands the meaning, providing a more accurate evaluation.
+- Time Saving: Automatically ranking and shortlisting candidates helps recruiters 
+  identify top applicants quickly without reading every resume.
+================================================================================
